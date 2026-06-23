@@ -92,43 +92,97 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getSchedule(): Promise<WeeklySchedule> {
-    const days: Array<[string, string]> = [
-      ["monday", "Senin"],
-      ["tuesday", "Selasa"],
-      ["wednesday", "Rabu"],
-      ["thursday", "Kamis"],
-      ["friday", "Jumat"],
-      ["saturday", "Sabtu"],
-      ["sunday", "Minggu"],
+    // --- Build samehadaku title pool (all ongoing pages) ---
+    const pool: string[] = [];
+    const first = await this.getOngoing(1);
+    pool.push(...first.data.map((a) => a.title));
+    if (first.totalPages > 1) {
+      const rest = await Promise.all(
+        Array.from({ length: first.totalPages - 1 }, (_, i) => this.getOngoing(i + 2))
+      );
+      rest.forEach((page) => pool.push(...page.data.map((a) => a.title)));
+    }
+
+    // --- Normalize title for matching ---
+    function norm(s: string): string {
+      return s
+        .toLowerCase()
+        // season number variants: "2nd Season" / "Season 2" / "S2" → "s2"
+        .replace(/\b(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|\d+th)\s+season\b/g, (_, n) => `s${n.replace(/\D/g, '')}`)
+        .replace(/\bseason\s*(\d+)\b/g, 's$1')
+        .replace(/\bpart\s*(\d+)\b/g, 'p$1')
+        .replace(/\bcour\s*(\d+)\b/g, 'c$1')
+        // remove anything that's not latin letter, digit, or space
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // Build normalized pool and Fuse index
+    const normalizedPool = pool.map(norm);
+    const { default: Fuse } = await import('fuse.js');
+    const fuse = new Fuse(normalizedPool, {
+      includeScore: true,
+      threshold: 0.35,    // 0 = exact, 1 = anything; 0.35 is tight but forgiving
+      distance: 120,      // allow matches anywhere in the string
+      minMatchCharLength: 3,
+    });
+
+    // Check if a Jikan anime is available on samehadaku
+    function isAvailable(jikanAnime: Record<string, unknown>): boolean {
+      const titleVariants = [
+        jikanAnime.title as string,
+        jikanAnime.title_english as string,
+        ...((jikanAnime.titles as Array<{ title: string }>) ?? []).map((t) => t.title),
+      ]
+        .filter((t): t is string => !!t && /[a-zA-Z]/.test(t)) // skip Japanese-only strings
+        .map(norm)
+        .filter((t) => t.length >= 3);
+
+      return titleVariants.some((t) => fuse.search(t).length > 0);
+    }
+
+    // --- Fetch Jikan schedule for all 7 days ---
+    const dayMap: Array<[string, string]> = [
+      ['monday',    'Senin'],
+      ['tuesday',   'Selasa'],
+      ['wednesday', 'Rabu'],
+      ['thursday',  'Kamis'],
+      ['friday',    'Jumat'],
+      ['saturday',  'Sabtu'],
+      ['sunday',    'Minggu'],
     ];
 
     const schedule: WeeklySchedule = {};
 
-    for (const [eng, indo] of days) {
+    for (const [eng, indo] of dayMap) {
       try {
         const res = await fetch(
           `https://api.jikan.moe/v4/schedules?filter=${eng}&limit=25`,
-          { next: { revalidate: 3600 } }
+          { cache: 'no-store' }
         );
-        const json = await res.json();
-        const entries: ScheduleEntry[] = (json.data ?? []).map((a: Record<string, unknown>) => {
-          const title = (a.title as string) ?? "";
-          // Derive a samehadaku-style slug from the title (best effort)
-          const slug = title
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, "")
-            .trim()
-            .replace(/\s+/g, "-");
-          const images = a.images as Record<string, Record<string, string>> | undefined;
-          const thumbnail = images?.jpg?.image_url ?? "";
-          const score = a.score ? String(a.score) : undefined;
-          return { title, slug, thumbnail, score };
-        });
+        const json = await res.json() as { data?: Record<string, unknown>[] };
+        const seen = new Set<number>();
+        const entries: ScheduleEntry[] = [];
+
+        for (const anime of (json.data ?? [])) {
+          const malId = anime.mal_id as number;
+          if (seen.has(malId)) continue;             // deduplicate
+          if (!isAvailable(anime)) continue;          // filter to samehadaku only
+          seen.add(malId);
+
+          const title = (anime.title as string) ?? '';
+          const slug = norm(title).replace(/\s+/g, '-');
+          const images = anime.images as Record<string, Record<string, string>> | undefined;
+          const thumbnail = images?.jpg?.image_url ?? '';
+          const score = anime.score ? String(anime.score) : undefined;
+          entries.push({ title, slug, thumbnail, score });
+        }
+
         if (entries.length > 0) schedule[indo] = entries;
-        // Jikan rate limit: 3 req/sec — add small delay between requests
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 400)); // Jikan rate limit
       } catch {
-        // skip this day if fetch fails
+        // skip day on error
       }
     }
 
