@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
     const data = await getProvider().getOngoing(page);
     return NextResponse.json(data);
   } catch (e) {
-    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[ongoing] scrape error:", msg);
+    return NextResponse.json({ error: "Failed to fetch", detail: msg }, { status: 500 });
   }
 }
