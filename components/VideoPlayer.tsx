@@ -17,14 +17,19 @@ export function VideoPlayer({ mirrors }: Props) {
     setError(null);
     setSelected({ quality: mirror.quality, index: mirror.index });
     try {
-      const res = await fetch("/api/embed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: mirror.id, mirror: mirror.index, quality: mirror.quality }),
-      });
-      const data = await res.json();
-      if (data.src) setEmbedSrc(data.src);
-      else setError("Gagal memuat video. Coba mirror lain.");
+      if (mirror.src) {
+        // pre-decoded embed URL (samehadaku and similar providers)
+        setEmbedSrc(mirror.src);
+      } else {
+        const res = await fetch("/api/embed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: mirror.id, mirror: mirror.index, quality: mirror.quality }),
+        });
+        const data = await res.json();
+        if (data.src) setEmbedSrc(data.src);
+        else setError("Gagal memuat video. Coba mirror lain.");
+      }
     } catch {
       setError("Terjadi kesalahan. Coba lagi.");
     } finally {

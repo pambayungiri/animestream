@@ -36,6 +36,7 @@ export interface Mirror {
   index: number;
   label: string;
   id: number;
+  src?: string; // pre-decoded embed URL (for non-AJAX providers like samehadaku)
 }
 
 export interface EpisodeDetail {
