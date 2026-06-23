@@ -15,7 +15,7 @@ export async function fetchPage(url: string, referer?: string) {
   return cheerio.load(res.data);
 }
 
-export async function postAjax(url: string, data: Record<string, string>, referer: string) {
+export async function postAjax(url: string, data: Record<string, string>, referer: string): Promise<import('axios').AxiosResponse> {
   const params = new URLSearchParams(data);
   const res = await axios.post(url, params.toString(), {
     headers: {
@@ -25,5 +25,5 @@ export async function postAjax(url: string, data: Record<string, string>, refere
     },
     timeout: 10000,
   });
-  return res.data;
+  return res;
 }
