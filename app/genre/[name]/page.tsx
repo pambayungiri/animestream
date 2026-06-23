@@ -4,7 +4,7 @@ import { SectionTitle } from "@/components/SectionTitle";
 import { getProvider } from "@/lib/providers";
 import type { AnimeCard as AnimeCardType } from "@/lib/providers/types";
 
-export const revalidate = 7200;
+export const dynamic = "force-dynamic";
 
 export default async function GenrePage({
   params,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SectionTitle } from "@/components/SectionTitle";
 import { getProvider } from "@/lib/providers";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu", "Random"];
 

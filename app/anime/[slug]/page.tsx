@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { getProvider } from "@/lib/providers";
 
-export const revalidate = 7200;
+export const dynamic = "force-dynamic";
 
 export default async function AnimeDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

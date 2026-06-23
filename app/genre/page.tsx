@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SectionTitle } from "@/components/SectionTitle";
 import { getProvider } from "@/lib/providers";
 
-export const revalidate = 43200;
+export const dynamic = "force-dynamic";
 
 export default async function GenreListPage() {
   const genres = await getProvider().getGenres();
