@@ -1,20 +1,22 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0f0f13;
+  --color-surface: #16161f;
+  --color-surface-2: #1e1e2a;
+  --color-accent: #e85d04;
+  --color-accent-hover: #f97316;
+  --color-muted: #6b7280;
+  --color-border: #2a2a38;
+  --color-foreground: #f1f5f9;
+  --radius: 0.5rem;
+}
 
 @layer base {
-  :root {
-    --background: #0f0f13;
-    --foreground: #f1f5f9;
-    --radius: 0.5rem;
-  }
-
   body {
     @apply bg-background text-foreground antialiased;
-  }
-
-  * {
-    @apply border-border;
+    background-color: #0f0f13;
+    color: #f1f5f9;
   }
 }
 
