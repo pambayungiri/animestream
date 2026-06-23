@@ -11,6 +11,6 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[ongoing] scrape error:", msg);
-    return NextResponse.json({ error: "Failed to fetch", detail: msg }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
