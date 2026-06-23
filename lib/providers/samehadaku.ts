@@ -61,8 +61,11 @@ function parseCards($: cheerio.CheerioAPI): AnimeCard[] {
   return cards;
 }
 
-function parseTotalPages($: cheerio.CheerioAPI): number {
-  let max = 1;
+function parseTotalPages($: cheerio.CheerioAPI, currentPage = 1): number {
+  // samehadaku uses .hpage with a next-page link — no numbered pagination
+  if ($(".hpage a.r").length > 0) return currentPage + 1;
+  // fallback: try numbered .page-numbers if ever present
+  let max = currentPage;
   $("a.page-numbers, .page-numbers").each((_, el) => {
     const n = parseInt($(el).text().trim(), 10);
     if (!isNaN(n) && n > max) max = n;
@@ -76,7 +79,7 @@ export class SamehadakuProvider implements AnimeProvider {
       page > 1 ? `&page=${page}` : ""
     }`;
     const $ = await fetchPage(url);
-    return { data: parseCards($), totalPages: parseTotalPages($), currentPage: page };
+    return { data: parseCards($), totalPages: parseTotalPages($, page), currentPage: page };
   }
 
   async getComplete(page = 1): Promise<PaginatedResult<AnimeCard>> {
@@ -84,7 +87,7 @@ export class SamehadakuProvider implements AnimeProvider {
       page > 1 ? `&page=${page}` : ""
     }`;
     const $ = await fetchPage(url);
-    return { data: parseCards($), totalPages: parseTotalPages($), currentPage: page };
+    return { data: parseCards($), totalPages: parseTotalPages($, page), currentPage: page };
   }
 
   async getSchedule(): Promise<WeeklySchedule> {
@@ -96,14 +99,15 @@ export class SamehadakuProvider implements AnimeProvider {
     const $ = await fetchPage(`${getBase()}/anime/?status=ongoing`);
     const genres: Genre[] = [];
     const seen = new Set<string>();
-    $("input[name=genre]").each((_, el) => {
+    $("input[name='genre[]']").each((_, el) => {
       const slug = $(el).attr("value") ?? "";
-      const label =
-        $(el).closest("li").text().trim() || slug;
-      if (slug && !seen.has(slug)) {
-        seen.add(slug);
-        genres.push({ name: label, slug });
-      }
+      // skip purely numeric IDs and single-character junk entries
+      if (!slug || /^\d+$/.test(slug) || slug.length <= 1) return;
+      if (seen.has(slug)) return;
+      seen.add(slug);
+      const id = $(el).attr("id") ?? "";
+      const label = id ? $(`label[for="${id}"]`).text().trim() : slug;
+      genres.push({ name: label || slug, slug });
     });
     return genres;
   }
@@ -111,7 +115,7 @@ export class SamehadakuProvider implements AnimeProvider {
   async getByGenre(genre: string, page = 1): Promise<PaginatedResult<AnimeCard>> {
     const url = `${getBase()}/genres/${genre}/${page > 1 ? `page/${page}/` : ""}`;
     const $ = await fetchPage(url);
-    return { data: parseCards($), totalPages: parseTotalPages($), currentPage: page };
+    return { data: parseCards($), totalPages: parseTotalPages($, page), currentPage: page };
   }
 
   async getAnimeDetail(slug: string): Promise<AnimeDetail> {
