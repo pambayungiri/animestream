@@ -1,29 +1,32 @@
-import axios from "axios";
 import * as cheerio from "cheerio";
+import { gotScraping } from "got-scraping";
 
-const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+};
 
 export async function fetchPage(url: string, referer?: string) {
-  const res = await axios.get(url, {
+  const res = await gotScraping(url, {
     headers: {
-      "User-Agent": UA,
-      Referer: referer ?? url,
-      Accept: "text/html,application/xhtml+xml",
+      ...HEADERS,
+      ...(referer ? { Referer: referer } : {}),
     },
-    timeout: 10000,
+    followRedirect: true,
   });
-  return cheerio.load(res.data);
+  return cheerio.load(res.body);
 }
 
-export async function postAjax(url: string, data: Record<string, string>, referer: string): Promise<import('axios').AxiosResponse> {
-  const params = new URLSearchParams(data);
-  const res = await axios.post(url, params.toString(), {
+export async function postAjax(url: string, data: Record<string, string>, referer: string) {
+  const res = await gotScraping.post(url, {
+    form: data,
     headers: {
-      "User-Agent": UA,
-      "Content-Type": "application/x-www-form-urlencoded",
+      ...HEADERS,
       Referer: referer,
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-    timeout: 10000,
   });
-  return res;
+  // Return an object compatible with AxiosResponse shape — callers use .data
+  return { data: JSON.parse(res.body) };
 }
