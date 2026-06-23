@@ -1,21 +1,16 @@
 import { AnimeCard } from "@/components/AnimeCard";
 import { SectionTitle } from "@/components/SectionTitle";
+import { getProvider } from "@/lib/providers";
 import type { AnimeCard as AnimeCardType } from "@/lib/providers/types";
 
 export const revalidate = 3600;
 
-async function getOngoing() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/ongoing?page=1`, { next: { revalidate: 3600 } });
-  return res.json();
-}
-
-async function getComplete() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/complete?page=1`, { next: { revalidate: 7200 } });
-  return res.json();
-}
-
 export default async function HomePage() {
-  const [ongoing, complete] = await Promise.all([getOngoing(), getComplete()]);
+  const provider = getProvider();
+  const [ongoing, complete] = await Promise.all([
+    provider.getOngoing(1),
+    provider.getComplete(1),
+  ]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

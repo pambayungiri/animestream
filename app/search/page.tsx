@@ -1,17 +1,14 @@
 import { AnimeCard } from "@/components/AnimeCard";
 import { SectionTitle } from "@/components/SectionTitle";
+import { getProvider } from "@/lib/providers";
 import type { AnimeCard as AnimeCardType } from "@/lib/providers/types";
 
-async function getData(q: string): Promise<AnimeCardType[]> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
-  return res.json();
-}
+export const dynamic = "force-dynamic";
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
   const query = q ?? "";
-  const results = query ? await getData(query) : [];
+  const results = query ? await getProvider().search(query) : [];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

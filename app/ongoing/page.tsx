@@ -1,20 +1,15 @@
 import { AnimeCard } from "@/components/AnimeCard";
 import { Pagination } from "@/components/Pagination";
 import { SectionTitle } from "@/components/SectionTitle";
+import { getProvider } from "@/lib/providers";
 import type { AnimeCard as AnimeCardType } from "@/lib/providers/types";
 
 export const revalidate = 7200;
 
-async function getData(page: number) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/ongoing?page=${page}`, { next: { revalidate: 7200 } });
-  return res.json();
-}
-
 export default async function OngoingPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { page: pageStr } = await searchParams;
   const page = Number(pageStr ?? "1");
-  const { data, totalPages, currentPage } = await getData(page);
+  const { data, totalPages, currentPage } = await getProvider().getOngoing(page);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

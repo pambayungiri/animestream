@@ -1,17 +1,11 @@
 import Link from "next/link";
 import { SectionTitle } from "@/components/SectionTitle";
-import type { Genre } from "@/lib/providers/types";
+import { getProvider } from "@/lib/providers";
 
 export const revalidate = 43200;
 
-async function getData(): Promise<Genre[]> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/genres`, { next: { revalidate: 43200 } });
-  return res.json();
-}
-
 export default async function GenreListPage() {
-  const genres = await getData();
+  const genres = await getProvider().getGenres();
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

@@ -1,19 +1,13 @@
 import Link from "next/link";
 import { SectionTitle } from "@/components/SectionTitle";
-import type { WeeklySchedule } from "@/lib/providers/types";
+import { getProvider } from "@/lib/providers";
 
 export const revalidate = 3600;
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu", "Random"];
 
-async function getData(): Promise<WeeklySchedule> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/schedule`, { next: { revalidate: 3600 } });
-  return res.json();
-}
-
 export default async function SchedulePage() {
-  const schedule = await getData();
+  const schedule = await getProvider().getSchedule();
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

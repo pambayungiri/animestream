@@ -2,19 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import type { AnimeDetail } from "@/lib/providers/types";
+import { getProvider } from "@/lib/providers";
 
 export const revalidate = 7200;
 
-async function getData(slug: string): Promise<AnimeDetail> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/anime/${slug}`, { next: { revalidate: 7200 } });
-  return res.json();
-}
-
 export default async function AnimeDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const anime = await getData(slug);
+  const anime = await getProvider().getAnimeDetail(slug);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

@@ -1,15 +1,10 @@
 import { AnimeCard } from "@/components/AnimeCard";
 import { Pagination } from "@/components/Pagination";
 import { SectionTitle } from "@/components/SectionTitle";
+import { getProvider } from "@/lib/providers";
 import type { AnimeCard as AnimeCardType } from "@/lib/providers/types";
 
 export const revalidate = 7200;
-
-async function getData(name: string, page: number) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/genres/${name}?page=${page}`, { next: { revalidate: 7200 } });
-  return res.json();
-}
 
 export default async function GenrePage({
   params,
@@ -21,7 +16,7 @@ export default async function GenrePage({
   const { name } = await params;
   const { page: pageStr } = await searchParams;
   const page = Number(pageStr ?? "1");
-  const { data, totalPages, currentPage } = await getData(name, page);
+  const { data, totalPages, currentPage } = await getProvider().getByGenre(name, page);
   const label = name.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 
   return (
