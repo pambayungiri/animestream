@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProvider } from "@/lib/providers";
 
-export const revalidate = 7200;
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const page = Number(req.nextUrl.searchParams.get("page") ?? "1");

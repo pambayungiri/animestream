@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/providers";
 
-export const revalidate = 43200;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
