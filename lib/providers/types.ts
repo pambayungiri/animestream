@@ -50,7 +50,9 @@ export interface EpisodeDetail {
 
 export interface ScheduleEntry {
   title: string;
-  slug: string;
+  slug: string;         // samehadaku-style slug (best effort from title)
+  thumbnail?: string;   // MAL cover image URL
+  score?: string;       // MAL score
 }
 
 export interface WeeklySchedule {

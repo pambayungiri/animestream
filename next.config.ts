@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "i1.wp.com" },
       { protocol: "https", hostname: "i2.wp.com" },
       { protocol: "https", hostname: "i3.wp.com" },
+      { protocol: "https", hostname: "cdn.myanimelist.net" },
     ],
   },
 };

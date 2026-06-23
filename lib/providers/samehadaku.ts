@@ -9,6 +9,7 @@ import type {
   EpisodeMeta,
   Mirror,
   WeeklySchedule,
+  ScheduleEntry,
   Genre,
   PaginatedResult,
 } from "./types";
@@ -91,8 +92,47 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getSchedule(): Promise<WeeklySchedule> {
-    // Schedule is JS-rendered on samehadaku — return empty
-    return {};
+    const days: Array<[string, string]> = [
+      ["monday", "Senin"],
+      ["tuesday", "Selasa"],
+      ["wednesday", "Rabu"],
+      ["thursday", "Kamis"],
+      ["friday", "Jumat"],
+      ["saturday", "Sabtu"],
+      ["sunday", "Minggu"],
+    ];
+
+    const schedule: WeeklySchedule = {};
+
+    for (const [eng, indo] of days) {
+      try {
+        const res = await fetch(
+          `https://api.jikan.moe/v4/schedules?filter=${eng}&limit=25`,
+          { next: { revalidate: 3600 } }
+        );
+        const json = await res.json();
+        const entries: ScheduleEntry[] = (json.data ?? []).map((a: Record<string, unknown>) => {
+          const title = (a.title as string) ?? "";
+          // Derive a samehadaku-style slug from the title (best effort)
+          const slug = title
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, "")
+            .trim()
+            .replace(/\s+/g, "-");
+          const images = a.images as Record<string, Record<string, string>> | undefined;
+          const thumbnail = images?.jpg?.image_url ?? "";
+          const score = a.score ? String(a.score) : undefined;
+          return { title, slug, thumbnail, score };
+        });
+        if (entries.length > 0) schedule[indo] = entries;
+        // Jikan rate limit: 3 req/sec — add small delay between requests
+        await new Promise(r => setTimeout(r, 400));
+      } catch {
+        // skip this day if fetch fails
+      }
+    }
+
+    return schedule;
   }
 
   async getGenres(): Promise<Genre[]> {
