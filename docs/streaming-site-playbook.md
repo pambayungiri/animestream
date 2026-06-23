@@ -8,22 +8,196 @@
 ## Table of Contents
 
 1. [Pre-Build Investigation](#1-pre-build-investigation)
-2. [Architecture](#2-architecture)
-3. [Tech Stack Gotchas](#3-tech-stack-gotchas)
-4. [Cloudflare & Scraping Problems](#4-cloudflare--scraping-problems)
-5. [Schedule Page Strategy](#5-schedule-page-strategy)
-6. [Embed Mechanisms by Site Type](#6-embed-mechanisms-by-site-type)
-7. [UI Guidelines](#7-ui-guidelines)
-8. [Vercel Deployment Checklist](#8-vercel-deployment-checklist)
-9. [Problems & Resolutions Reference](#9-problems--resolutions-reference)
-10. [Copy-Paste Prompt Template](#10-copy-paste-prompt-template)
-11. [Provider Implementation Checklist](#11-provider-implementation-checklist)
+2. [Reverse Engineering the Video API (From Zero)](#2-reverse-engineering-the-video-api-from-zero)
+3. [Architecture](#3-architecture)
+4. [Tech Stack Gotchas](#4-tech-stack-gotchas)
+5. [Cloudflare & Scraping Problems](#5-cloudflare--scraping-problems)
+6. [Schedule Page Strategy](#6-schedule-page-strategy)
+7. [Embed Mechanisms by Site Type](#7-embed-mechanisms-by-site-type)
+8. [UI Guidelines](#8-ui-guidelines)
+9. [Vercel Deployment Checklist](#9-vercel-deployment-checklist)
+10. [Problems & Resolutions Reference](#10-problems--resolutions-reference)
+11. [Copy-Paste Prompt Template](#11-copy-paste-prompt-template)
+12. [Provider Implementation Checklist](#12-provider-implementation-checklist)
 
 ---
 
 ## 1. Pre-Build Investigation
 
 **Do this before writing any code. It saves days.**
+
+---
+
+## 2. Reverse Engineering the Video API (From Zero)
+
+This is the most important skill. When you open a new anime site, you don't know how it serves video. This section is the exact detective process to figure it out — no prior knowledge required.
+
+### Step 1: Open the site and go to an episode page
+
+Pick any popular ongoing anime (One Piece, Naruto, etc.) and click to an episode. You need a page that has a working video player.
+
+### Step 2: Open Browser DevTools → Network tab
+
+1. Press `F12` or right-click → Inspect
+2. Click the **Network** tab
+3. Filter to **XHR/Fetch** only (click the XHR button)
+4. **Clear the log** so it starts fresh
+5. Now click one of the mirror/server buttons on the page to load the video
+
+Watch what requests appear. You're looking for:
+- A POST request to `admin-ajax.php` → **WordPress AJAX pattern**
+- Nothing at all (video was already in the page) → **base64 in HTML pattern**
+- A request to `/proxy.php` or `/btube.php` → **Encrypted proxy pattern**
+
+### Step 3A: If you see admin-ajax.php requests (WordPress AJAX)
+
+Click the request in DevTools. Check:
+- **Request Payload** tab → shows what was POSTed
+- **Response** tab → shows what came back
+
+You'll see something like:
+```
+POST admin-ajax.php
+Payload: action=aa1208d27f29ca340c92c66d1926f13f
+Response: {"status":"success","data":"nonce_value_here"}
+```
+
+Then a second request:
+```
+POST admin-ajax.php
+Payload: id=12345&i=0&q=720p&nonce=abc123&action=2a3505c93b0035d3f455df82bf976b84
+Response: {"status":"success","data":"PGlmcmFtZSBzcmM9Imh0dHBzOi8v..."}  ← base64
+```
+
+Decode that base64 response:
+```bash
+echo "PGlmcmFtZSBzcmM9Imh0dHBzOi8v..." | base64 -d
+# → <iframe src="https://vidhide.com/embed/abc123" width="100%" ...></iframe>
+```
+
+The `src` attribute is your embed URL. Now you know the full chain.
+
+**To find the two action hashes without clicking in the browser:**
+```bash
+# Grep the episode page source for 32-character hex strings (action hashes)
+curl -s "https://[site]/episode/[any-slug]/" \
+  | grep -oP "[a-f0-9]{32}" | sort -u
+
+# Also look for where they're used:
+curl -s "https://[site]/episode/[any-slug]/" \
+  | grep -oP "action['\"]?\s*:\s*['\"]?[a-zA-Z0-9_]{20,}" | head -10
+```
+
+**To find the `data-content` (the {id, i, q} payload):**
+```bash
+# Mirror buttons have a data-content attribute with base64-encoded JSON
+curl -s "https://[site]/episode/[any-slug]/" \
+  | grep -oP 'data-content="[^"]+"' | head -5
+
+# Decode one of them:
+curl -s "https://[site]/episode/[any-slug]/" \
+  | grep -oP 'data-content="[^"]+"' | head -1 \
+  | grep -oP '"[A-Za-z0-9+/=]+"' | tr -d '"' | base64 -d
+# → {"id": 12345, "i": 0, "q": "720p"}
+```
+
+**Now reproduce the full chain with curl (no browser needed):**
+```bash
+SITE="https://[site]"
+NONCE_ACTION="[32-char hash from above]"
+EMBED_ACTION="[other 32-char hash]"
+
+# Step 1: Get nonce
+NONCE=$(curl -s -X POST "$SITE/wp-admin/admin-ajax.php" \
+  -H "Referer: $SITE" \
+  -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
+  -d "action=$NONCE_ACTION" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data'])")
+echo "Nonce: $NONCE"
+
+# Step 2: Get embed URL (use id/i/q from the data-content you decoded)
+curl -s -X POST "$SITE/wp-admin/admin-ajax.php" \
+  -H "Referer: $SITE" \
+  -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
+  -d "id=12345&i=0&q=720p&nonce=$NONCE&action=$EMBED_ACTION" \
+  | python3 -c "
+import sys, json, base64
+d = json.load(sys.stdin)
+html = base64.b64decode(d['data']).decode()
+print(html)
+"
+# → <iframe src="https://vidhide.com/embed/xyz">
+```
+
+If this curl works, your scraping implementation will work.
+
+### Step 3B: If you see NO network requests (video was already in page)
+
+The embed URLs are baked directly into the HTML. Look for a `<select>` or radio buttons with suspiciously long encoded values:
+
+```bash
+# Look for base64-encoded option values (long strings of A-Z, a-z, 0-9, +, /)
+curl -s "https://[site]/episode/[slug]/" \
+  | grep -oP '<option[^>]+value="[A-Za-z0-9+/=]{30,}"' | head -5
+
+# Decode one:
+curl -s "https://[site]/episode/[slug]/" \
+  | python3 -c "
+import sys, re, base64
+html = sys.stdin.read()
+# Find all long base64 values in option tags
+vals = re.findall(r'<option[^>]+value=\"([A-Za-z0-9+/=]{30,})\"', html)
+for v in vals[:3]:
+    try:
+        print(base64.b64decode(v + '==').decode())
+    except:
+        pass
+"
+# → <iframe src="https://blogger.com/video.g?token=AD6v5d...">
+```
+
+If this gives you iframe HTML, it's Pattern B — no AJAX needed.
+
+### Step 3C: If you see a proxy script request
+
+```bash
+# Check what the proxy returns:
+curl -s "https://[site]/proxy.php?url=[encrypted_param]" -L -v 2>&1 | grep "Location\|https"
+```
+
+If it redirects to a `googlevideo.com` URL, it's Pattern C. These URLs are **IP-locked** — they'll only work for the IP that fetched them. This means you cannot proxy them through your server. The user's browser must fetch and resolve the URL directly.
+
+### Step 4: Verify the embed URL actually plays
+
+Take whatever embed URL you extracted and:
+1. Open it directly in your browser: `https://vidhide.com/embed/xyz`
+2. Or embed it in a test HTML file: `<iframe src="https://vidhide.com/embed/xyz" width="800" height="450"></iframe>`
+
+If you see a video player → ✅ you've found the real API, implementation will work.
+If you see a blank page or error → the URL may be expired, IP-locked, or require Referer headers.
+
+### Step 5: Document what you found
+
+Before writing code, write down:
+```
+Site: [name]
+Base URL: https://[domain]
+Embed pattern: A / B / C
+Ongoing page: /[path]/?page=N  (or /page/N/)
+Episode page: /[pattern]/
+Card selector: article.[class] or div.[class]
+Thumbnail selector: img.[class]
+Title selector: h2.[class] or .title
+Mirror selector: [if Pattern B] select.[class] option[value]
+Nonce action hash: [if Pattern A] [hash]
+Embed action hash: [if Pattern A] [hash]
+Cloudflare: yes/no (tested with curl)
+Schedule in static HTML: yes/no (curl | grep -c "anime")
+```
+
+This document becomes the spec for your provider implementation.
+
+---
 
 ### 1.1 Pick Your Source Site Wisely
 
