@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { fetchPage } from "../scraper";
+import { getConfig } from "../config";
 import type {
   AnimeProvider,
   AnimeCard,
@@ -12,15 +13,17 @@ import type {
   PaginatedResult,
 } from "./types";
 
-const BASE = "https://samehadaku.me";
+function getBase(): string {
+  return getConfig().samehadakuBaseUrl;
+}
 
 function extractSlugFromHref(href: string): string {
   // href: https://samehadaku.me/anime/{slug}/ → slug
-  return href.replace(BASE, "").replace(/^\/anime\//, "").replace(/\/$/, "");
+  return href.replace(getBase(), "").replace(/^\/anime\//, "").replace(/\/$/, "");
 }
 
 function extractEpisodeSlugFromHref(href: string): string {
-  return href.replace(BASE, "").replace(/^\//, "").replace(/\/$/, "");
+  return href.replace(getBase(), "").replace(/^\//, "").replace(/\/$/, "");
 }
 
 function extractIframeSrc(base64: string): string | null {
@@ -69,7 +72,7 @@ function parseTotalPages($: cheerio.CheerioAPI): number {
 
 export class SamehadakuProvider implements AnimeProvider {
   async getOngoing(page = 1): Promise<PaginatedResult<AnimeCard>> {
-    const url = `${BASE}/anime/?status=ongoing&type=&order=update${
+    const url = `${getBase()}/anime/?status=ongoing&type=&order=update${
       page > 1 ? `&page=${page}` : ""
     }`;
     const $ = await fetchPage(url);
@@ -77,7 +80,7 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getComplete(page = 1): Promise<PaginatedResult<AnimeCard>> {
-    const url = `${BASE}/anime/?status=completed&sub=&order=update${
+    const url = `${getBase()}/anime/?status=completed&sub=&order=update${
       page > 1 ? `&page=${page}` : ""
     }`;
     const $ = await fetchPage(url);
@@ -90,7 +93,7 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getGenres(): Promise<Genre[]> {
-    const $ = await fetchPage(`${BASE}/anime/?status=ongoing`);
+    const $ = await fetchPage(`${getBase()}/anime/?status=ongoing`);
     const genres: Genre[] = [];
     const seen = new Set<string>();
     $("input[name=genre]").each((_, el) => {
@@ -106,13 +109,13 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getByGenre(genre: string, page = 1): Promise<PaginatedResult<AnimeCard>> {
-    const url = `${BASE}/genres/${genre}/${page > 1 ? `page/${page}/` : ""}`;
+    const url = `${getBase()}/genres/${genre}/${page > 1 ? `page/${page}/` : ""}`;
     const $ = await fetchPage(url);
     return { data: parseCards($), totalPages: parseTotalPages($), currentPage: page };
   }
 
   async getAnimeDetail(slug: string): Promise<AnimeDetail> {
-    const $ = await fetchPage(`${BASE}/anime/${slug}/`);
+    const $ = await fetchPage(`${getBase()}/anime/${slug}/`);
 
     const title =
       $(".bigcontent .infox h1.entry-title").text().trim() ||
@@ -180,7 +183,7 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async getEpisode(slug: string): Promise<EpisodeDetail> {
-    const url = `${BASE}/${slug}/`;
+    const url = `${getBase()}/${slug}/`;
     const $ = await fetchPage(url);
 
     const title = $("h1.entry-title").first().text().trim();
@@ -214,7 +217,7 @@ export class SamehadakuProvider implements AnimeProvider {
   }
 
   async search(query: string): Promise<AnimeCard[]> {
-    const $ = await fetchPage(`${BASE}/?s=${encodeURIComponent(query)}`);
+    const $ = await fetchPage(`${getBase()}/?s=${encodeURIComponent(query)}`);
     return parseCards($);
   }
 }
